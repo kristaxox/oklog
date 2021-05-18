@@ -47,7 +47,8 @@ func (fl *fileLogDCS) Purgeable(oldestModTime time.Time) ([]TrashSegment, error)
 	return trashSegmentsDCS, nil
 }
 
-// Close won't close underlying fileLog's resources.
+// Close closes only fileLogDCS's resources and won't close underlying fileLog's
+// resources.
 func (fl *fileLogDCS) Close() error {
 	return fl.project.Close()
 }
@@ -75,23 +76,26 @@ type fileTrashSegmentDCS struct {
 	bucketName string
 }
 
-func abortUnlessCommitted(reporter EventReporter, upload *uplink.Upload) {
+func abortUnlessCommitted(reporter EventReporter, file string, upload *uplink.Upload) {
 	if err := upload.Abort(); err != nil {
 		if errors.Is(err, uplink.ErrUploadDone) {
 			reporter.ReportEvent(Event{
 				Debug: true,
+				File:  file,
 				Msg:   "Upload already aborted/committed",
 			})
 			return
 		}
 		reporter.ReportEvent(Event{
+			File:  file,
 			Error: err,
 			Msg:   "Could not abort upload",
 		})
 		return
 	}
 	reporter.ReportEvent(Event{
-		Msg: "Upload aborted",
+		File: file,
+		Msg:  "Upload aborted",
 	})
 }
 
@@ -103,7 +107,7 @@ func (t fileTrashSegmentDCS) Purge() error {
 	if err != nil {
 		return errors.Wrap(err, "UploadObject")
 	}
-	defer abortUnlessCommitted(t.reporter, upload)
+	defer abortUnlessCommitted(t.reporter, t.f.Name(), upload)
 
 	n, err := io.Copy(upload, t.f)
 	if err != nil {

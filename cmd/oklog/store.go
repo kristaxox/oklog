@@ -16,6 +16,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/rs/cors"
+	"storj.io/uplink"
 
 	"github.com/oklog/oklog/pkg/cluster"
 	"github.com/oklog/oklog/pkg/fs"
@@ -39,25 +40,50 @@ var (
 	defaultStorePath = filepath.Join("data", "store")
 )
 
+func newStoreLogDCS(serializedAccess string, storeLog store.Log, bucketName string) (store.Log, error) {
+	access, err := uplink.ParseAccess(serializedAccess)
+	if err != nil {
+		return nil, errors.Wrap(err, "ParseAccess")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	project, err := uplink.OpenProject(ctx, access)
+	if err != nil {
+		return nil, errors.Wrap(err, "OpenProject")
+	}
+
+	storeLogDCS, err := store.NewFileLogDCS(ctx, storeLog, project, bucketName)
+	if err != nil {
+		return nil, errors.Wrap(err, "NewFileLogDCS")
+	}
+
+	return storeLogDCS, nil
+}
+
 func runStore(args []string) error {
 	flagset := flag.NewFlagSet("store", flag.ExitOnError)
 	var (
-		debug                    = flagset.Bool("debug", false, "debug logging")
-		apiAddr                  = flagset.String("api", defaultAPIAddr, "listen address for store API")
-		clusterBindAddr          = flagset.String("cluster", defaultClusterAddr, "listen address for cluster")
-		clusterAdvertiseAddr     = flagset.String("cluster.advertise-addr", "", "optional, explicit address to advertise in cluster")
-		storePath                = flagset.String("store.path", defaultStorePath, "path holding segment files for storage tier")
-		segmentConsumers         = flagset.Int("store.segment-consumers", defaultStoreSegmentConsumers, "concurrent segment consumers")
-		segmentTargetSize        = flagset.Int64("store.segment-target-size", defaultStoreSegmentTargetSize, "try to keep store segments about this size")
-		segmentTargetAge         = flagset.Duration("store.segment-target-age", defaultStoreSegmentTargetAge, "replicate once the aggregate segment is this old")
-		segmentDelay             = flagset.Duration("store.segment-delay", defaultStoreSegmentDelay, "request next segment files after this delay")
-		segmentBufferSize        = flagset.Int64("store.segment-buffer-size", defaultStoreSegmentBufferSize, "per-segment in-memory read buffer during queries")
-		segmentReplicationFactor = flagset.Int("store.segment-replication-factor", defaultStoreSegmentReplicationFactor, "how many copies of each segment to replicate")
-		segmentRetain            = flagset.Duration("store.segment-retain", defaultStoreSegmentRetain, "retention period for segment files")
-		segmentPurge             = flagset.Duration("store.segment-purge", defaultStoreSegmentPurge, "purge deleted segment files after this long")
-		uiLocal                  = flagset.Bool("ui.local", false, "ignore embedded files and go straight to the filesystem")
-		filesystem               = flagset.String("filesystem", defaultFilesystem, "real, virtual, nop")
-		clusterPeers             = stringslice{}
+		debug                     = flagset.Bool("debug", false, "debug logging")
+		apiAddr                   = flagset.String("api", defaultAPIAddr, "listen address for store API")
+		clusterBindAddr           = flagset.String("cluster", defaultClusterAddr, "listen address for cluster")
+		clusterAdvertiseAddr      = flagset.String("cluster.advertise-addr", "", "optional, explicit address to advertise in cluster")
+		storePath                 = flagset.String("store.path", defaultStorePath, "path holding segment files for storage tier")
+		segmentConsumers          = flagset.Int("store.segment-consumers", defaultStoreSegmentConsumers, "concurrent segment consumers")
+		segmentTargetSize         = flagset.Int64("store.segment-target-size", defaultStoreSegmentTargetSize, "try to keep store segments about this size")
+		segmentTargetAge          = flagset.Duration("store.segment-target-age", defaultStoreSegmentTargetAge, "replicate once the aggregate segment is this old")
+		segmentDelay              = flagset.Duration("store.segment-delay", defaultStoreSegmentDelay, "request next segment files after this delay")
+		segmentBufferSize         = flagset.Int64("store.segment-buffer-size", defaultStoreSegmentBufferSize, "per-segment in-memory read buffer during queries")
+		segmentReplicationFactor  = flagset.Int("store.segment-replication-factor", defaultStoreSegmentReplicationFactor, "how many copies of each segment to replicate")
+		segmentRetain             = flagset.Duration("store.segment-retain", defaultStoreSegmentRetain, "retention period for segment files")
+		segmentPurge              = flagset.Duration("store.segment-purge", defaultStoreSegmentPurge, "purge deleted segment files after this long")
+		segmentPurgeDCS           = flagset.Bool("store.segment-purge-dcs", true, "move trashed segments to Storj DCS for cold storage on purge")
+		segmentPurgeDCSAccess     = flagset.String("store.segment-purge-dcs-access", "", "serialized access grant string for Storj DCS")
+		segmentPurgeDCSBucketName = flagset.String("store.segment-purge-dcs-bucket-name", "oklog", "bucket name to use while archiving to Storj DCS")
+		uiLocal                   = flagset.Bool("ui.local", false, "ignore embedded files and go straight to the filesystem")
+		filesystem                = flagset.String("filesystem", defaultFilesystem, "real, virtual, nop")
+		clusterPeers              = stringslice{}
 	)
 	flagset.Var(&clusterPeers, "peer", "cluster peer host:port (repeatable)")
 	flagset.Usage = usageFor(flagset, "oklog store [flags]")
@@ -220,16 +246,20 @@ func runStore(args []string) error {
 	}()
 	level.Info(logger).Log("StoreLog", *storePath)
 
-	// TODO(amwolff): finish initialisation below.
-	storeLogDCS, err := store.NewFileLogDCS(context.TODO(), storeLog, nil, "")
-	if err != nil {
-		return err
-	}
-	defer func() {
-		if err := storeLogDCS.Close(); err != nil {
-			level.Error(logger).Log("err", err)
+	usedStoreLog := storeLog // use intermediate variable so defer still work correctly
+
+	if *segmentPurgeDCS {
+		s, err := newStoreLogDCS(*segmentPurgeDCSAccess, storeLog, *segmentPurgeDCSBucketName)
+		if err != nil {
+			return err
 		}
-	}()
+		defer func() {
+			if err := s.Close(); err != nil {
+				level.Error(logger).Log("err", err)
+			}
+		}()
+		usedStoreLog = s
+	}
 
 	// Create peer.
 	peer, err := cluster.NewPeer(
@@ -298,7 +328,7 @@ func runStore(args []string) error {
 	}
 	{
 		c := store.NewCompacter(
-			storeLogDCS,
+			usedStoreLog,
 			*segmentTargetSize,
 			*segmentRetain,
 			*segmentPurge,
@@ -319,7 +349,7 @@ func runStore(args []string) error {
 			mux := http.NewServeMux()
 			api := store.NewAPI(
 				peer,
-				storeLogDCS,
+				usedStoreLog,
 				timeoutClient,
 				unlimitedClient,
 				replicatedSegments.WithLabelValues("ingress"),
