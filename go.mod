@@ -8,7 +8,6 @@ require (
 	github.com/djherbis/buffer v0.0.0-20150721040419-4972e2bf4a27
 	github.com/djherbis/nio v2.0.3+incompatible
 	github.com/go-kit/kit v0.9.0
-	github.com/golang/protobuf v1.3.5 // indirect
 	github.com/google/btree v1.0.0
 	github.com/google/go-cmp v0.5.2 // indirect
 	github.com/hashicorp/go-immutable-radix v1.3.0 // indirect
@@ -22,7 +21,7 @@ require (
 	github.com/oklog/run v1.0.0
 	github.com/oklog/ulid v1.3.1
 	github.com/pborman/uuid v0.0.0-20170612153648-e790cca94e6c
-	github.com/pkg/errors v0.8.1
+	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.4.0
 	github.com/prometheus/prometheus v2.1.0+incompatible
 	github.com/prometheus/tsdb v0.7.1 // indirect
@@ -30,4 +29,5 @@ require (
 	github.com/spaolacci/murmur3 v1.1.0 // indirect
 	github.com/stretchr/testify v1.7.0 // indirect
 	golang.org/x/net v0.0.0-20210410081132-afb366fc7cd1 // indirect
+	storj.io/uplink v1.4.6
 )

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"net"
@@ -219,6 +220,17 @@ func runStore(args []string) error {
 	}()
 	level.Info(logger).Log("StoreLog", *storePath)
 
+	// TODO(amwolff): finish initialisation below.
+	storeLogDCS, err := store.NewFileLogDCS(context.TODO(), storeLog, nil, "")
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if err := storeLogDCS.Close(); err != nil {
+			level.Error(logger).Log("err", err)
+		}
+	}()
+
 	// Create peer.
 	peer, err := cluster.NewPeer(
 		clusterBindHost, clusterBindPort,
@@ -240,7 +252,7 @@ func runStore(args []string) error {
 	unlimitedClient := http.DefaultClient // no timeouts, be careful
 	timeoutClient := &http.Client{
 		Transport: &http.Transport{
-			Proxy: http.ProxyFromEnvironment,
+			Proxy:                 http.ProxyFromEnvironment,
 			ResponseHeaderTimeout: 5 * time.Second,
 			Dial: (&net.Dialer{
 				Timeout:   10 * time.Second,
@@ -286,7 +298,7 @@ func runStore(args []string) error {
 	}
 	{
 		c := store.NewCompacter(
-			storeLog,
+			storeLogDCS,
 			*segmentTargetSize,
 			*segmentRetain,
 			*segmentPurge,
@@ -307,7 +319,7 @@ func runStore(args []string) error {
 			mux := http.NewServeMux()
 			api := store.NewAPI(
 				peer,
-				storeLog,
+				storeLogDCS,
 				timeoutClient,
 				unlimitedClient,
 				replicatedSegments.WithLabelValues("ingress"),
