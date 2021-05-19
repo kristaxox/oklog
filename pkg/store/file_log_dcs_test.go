@@ -1,6 +1,8 @@
 package store
 
 import (
+	"compress/gzip"
+	"fmt"
 	"io"
 	"testing"
 
@@ -9,21 +11,21 @@ import (
 	"storj.io/storj/private/testplanet"
 )
 
-func Test_fileLogDCS_Purgeable(t *testing.T) {}
-
-type nopEventReporter struct{}
+type testEventReporter struct {
+	t *testing.T
+}
 
 // ReportEvent implements EventReporter.
-func (nopEventReporter) ReportEvent(Event) {}
+func (r testEventReporter) ReportEvent(e Event) {
+	r.t.Logf("%+v", e)
+}
 
 func Test_fileTrashSegmentDCS_Purge(t *testing.T) {
 	testplanet.Run(t, testplanet.Config{
 		SatelliteCount:   1,
-		StorageNodeCount: 1,
+		StorageNodeCount: 0, // uploaded/downloaded object will be an inline segment
 		UplinkCount:      1,
 	}, func(t *testing.T, ctx *testcontext.Context, planet *testplanet.Planet) {
-		t.FailNow()
-
 		virtualFS := fs.NewVirtualFilesystem()
 
 		const testfilename = "testfile"
@@ -52,7 +54,7 @@ func Test_fileTrashSegmentDCS_Purge(t *testing.T) {
 		}
 
 		segment := fileTrashSegmentDCS{
-			reporter:         nopEventReporter{},
+			reporter:         testEventReporter{t: t},
 			fileTrashSegment: fileTrashSegment{virtualFS, testfile},
 			project:          project,
 			bucketName:       bucketName,
@@ -62,17 +64,23 @@ func Test_fileTrashSegmentDCS_Purge(t *testing.T) {
 			t.Fatalf("Purge: %v", err)
 		}
 
-		if !virtualFS.Exists(testfilename) {
+		if virtualFS.Exists(testfilename) {
 			t.Errorf("%s shouldn't exist at this point", testfilename)
 		}
 
-		download, err := project.DownloadObject(ctx, bucketName, testfile.Name(), nil)
+		download, err := project.DownloadObject(ctx, bucketName, fmt.Sprintf("%s.gz", testfilename), nil)
 		if err != nil {
 			t.Fatalf("DownloadObject: %v", err)
 		}
 		defer ctx.Check(download.Close)
 
-		b, err := io.ReadAll(download)
+		r, err := gzip.NewReader(download)
+		if err != nil {
+			t.Fatalf("NewReader: %v", err)
+		}
+		defer ctx.Check(r.Close)
+
+		b, err := io.ReadAll(r)
 		if err != nil {
 			t.Fatalf("ReadAll: %v", err)
 		}

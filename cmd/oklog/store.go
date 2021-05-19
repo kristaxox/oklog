@@ -79,7 +79,7 @@ func runStore(args []string) error {
 		segmentRetain             = flagset.Duration("store.segment-retain", defaultStoreSegmentRetain, "retention period for segment files")
 		segmentPurge              = flagset.Duration("store.segment-purge", defaultStoreSegmentPurge, "purge deleted segment files after this long")
 		segmentPurgeDCS           = flagset.Bool("store.segment-purge-dcs", true, "move trashed segments to Storj DCS for cold storage on purge")
-		segmentPurgeDCSAccess     = flagset.String("store.segment-purge-dcs-access", "", "serialized access grant string for Storj DCS")
+		segmentPurgeDCSAccess     = flagset.String("store.segment-purge-dcs-access", os.Getenv("ACCESS_GRANT"), "serialized access grant string for Storj DCS")
 		segmentPurgeDCSBucketName = flagset.String("store.segment-purge-dcs-bucket-name", "oklog", "bucket name to use while archiving to Storj DCS")
 		uiLocal                   = flagset.Bool("ui.local", false, "ignore embedded files and go straight to the filesystem")
 		filesystem                = flagset.String("filesystem", defaultFilesystem, "real, virtual, nop")

@@ -1,6 +1,7 @@
 package store
 
 import (
+	"compress/gzip"
 	"context"
 	"fmt"
 	"io"
@@ -47,8 +48,7 @@ func (fl *fileLogDCS) Purgeable(oldestModTime time.Time) ([]TrashSegment, error)
 	return trashSegmentsDCS, nil
 }
 
-// Close closes only fileLogDCS's resources and won't close underlying fileLog's
-// resources.
+// Close closes only fileLogDCS's resources and won't close underlying fileLog.
 func (fl *fileLogDCS) Close() error {
 	return fl.project.Close()
 }
@@ -103,15 +103,21 @@ func (t fileTrashSegmentDCS) Purge() error {
 	ctx, cancel := context.WithTimeout(context.Background(), uploadTimeout)
 	defer cancel()
 
-	upload, err := t.project.UploadObject(ctx, t.bucketName, t.f.Name(), nil)
+	upload, err := t.project.UploadObject(ctx, t.bucketName, fmt.Sprintf("%s.gz", t.f.Name()), nil)
 	if err != nil {
 		return errors.Wrap(err, "UploadObject")
 	}
 	defer abortUnlessCommitted(t.reporter, t.f.Name(), upload)
 
-	n, err := io.Copy(upload, t.f)
+	w := gzip.NewWriter(upload)
+
+	n, err := io.Copy(w, t.f)
 	if err != nil {
 		return errors.Wrap(err, "Copy")
+	}
+
+	if err := w.Close(); err != nil {
+		return errors.Wrap(err, "Close")
 	}
 
 	t.reporter.ReportEvent(Event{
