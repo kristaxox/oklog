@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"path/filepath"
 	"time"
 
 	"github.com/pkg/errors"
@@ -103,11 +104,13 @@ func (t fileTrashSegmentDCS) Purge() error {
 	ctx, cancel := context.WithTimeout(context.Background(), uploadTimeout)
 	defer cancel()
 
-	upload, err := t.project.UploadObject(ctx, t.bucketName, fmt.Sprintf("%s.gz", t.f.Name()), nil)
+	key := filepath.Base(t.f.Name())
+
+	upload, err := t.project.UploadObject(ctx, t.bucketName, fmt.Sprintf("%s.gz", key), nil)
 	if err != nil {
 		return errors.Wrap(err, "UploadObject")
 	}
-	defer abortUnlessCommitted(t.reporter, t.f.Name(), upload)
+	defer abortUnlessCommitted(t.reporter, key, upload)
 
 	w := gzip.NewWriter(upload)
 
