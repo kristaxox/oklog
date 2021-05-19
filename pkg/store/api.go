@@ -30,6 +30,7 @@ const (
 	APIPathInternalStream = "/_stream"
 	APIPathReplicate      = "/replicate"
 	APIPathClusterState   = "/_clusterstate"
+	APIPathDCSQuery       = "/dcsquery"
 )
 
 // ClusterPeer models cluster.Peer.
@@ -111,6 +112,8 @@ func (a *API) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		a.handleReplicate(w, r)
 	case method == "GET" && path == APIPathClusterState:
 		a.handleClusterState(w, r)
+	case method == "GET" && path == APIPathDCSQuery:
+		a.handleDCSQuery(w, r)
 	default:
 		http.NotFound(w, r)
 	}
@@ -447,6 +450,28 @@ func (a *API) handleClusterState(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.Write(buf)
+}
+
+func (a *API) handleDCSQuery(w http.ResponseWriter, r *http.Request) {
+	var qp QueryParams
+	if err := qp.DecodeFrom(r.URL, rangeNotRequired); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	log, ok := a.log.(*fileLogDCS)
+	if !ok {
+		http.Error(w, "unsupported log type, must be fileLogDCS", http.StatusNotImplemented)
+		return
+	}
+
+	lr := log.DCSReader(qp)
+
+	_, err := io.Copy(w, lr)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 }
 
 func teeRecords(src io.Reader, dst ...io.Writer) (lo, hi ulid.ULID, n int, err error) {

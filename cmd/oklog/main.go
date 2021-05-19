@@ -33,6 +33,7 @@ func usage() {
 	fmt.Fprintf(os.Stderr, "  query        Querying commandline tool\n")
 	fmt.Fprintf(os.Stderr, "  stream       Streaming commandline tool\n")
 	fmt.Fprintf(os.Stderr, "  testsvc      Test service, emits log lines at a fixed rate\n")
+	fmt.Fprintf(os.Stderr, "  retrieve     Retrieve commandline tool to read purged logs stored in Storj DCS")
 	fmt.Fprintf(os.Stderr, "\n")
 	fmt.Fprintf(os.Stderr, "VERSION\n")
 	fmt.Fprintf(os.Stderr, "  %s (%s)\n", version, runtime.Version())
@@ -61,6 +62,8 @@ func main() {
 		run = runStream
 	case "testsvc":
 		run = runTestService
+	case "retrieve":
+		run = runRetrieve
 	default:
 		usage()
 		os.Exit(1)

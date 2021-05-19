@@ -11,7 +11,10 @@ import (
 	"storj.io/uplink"
 )
 
-const uploadTimeout = 15 * time.Second
+const (
+	uploadTimeout   = 15 * time.Second
+	downloadTimeout = 15 * time.Second
+)
 
 var (
 	_ Log          = (*fileLogDCS)(nil)
@@ -132,4 +135,81 @@ func (t fileTrashSegmentDCS) Purge() error {
 	}
 
 	return t.fileTrashSegment.Purge() // The segment is in DCS now, and we're safe to delete it.
+}
+
+func (fl *fileLogDCS) DCSReader(qp QueryParams) io.Reader {
+	pr, pw := io.Pipe()
+
+	go func() {
+		defer pw.Close()
+
+		ctx, cancel := context.WithTimeout(context.Background(), downloadTimeout)
+		defer cancel()
+
+		var totalBytes int64
+
+		// TODO: sorting the segment files from the bucket, an equivalent to sorting in queryMatchingSegments()
+		iterator := fl.project.ListObjects(ctx, fl.bucketName, nil)
+		for iterator.Next() {
+			low, high, err := parseFilename(iterator.Item().Key)
+			if err != nil {
+				fl.reportDCSWarning(err, iterator.Item().Key)
+				continue
+			}
+
+			if !overlap(qp.From.ULID, qp.To.ULID, low, high) {
+				continue
+			}
+
+			download, err := fl.project.DownloadObject(ctx, fl.bucketName, iterator.Item().Key, nil)
+			if err != nil {
+				fl.reportDCSError(err, iterator.Item().Key)
+				continue
+			}
+
+			gzDownload, err := gzip.NewReader(download)
+			if err != nil {
+				download.Close()
+				fl.reportDCSError(err, iterator.Item().Key)
+				continue
+			}
+
+			n, err := io.Copy(pw, gzDownload)
+			if err != nil {
+				gzDownload.Close()
+				download.Close()
+				fl.reportDCSError(err, iterator.Item().Key)
+				continue
+			}
+
+			gzDownload.Close()
+			download.Close()
+
+			totalBytes += n
+		}
+
+		fl.reporter.ReportEvent(Event{
+			Debug: true,
+			Op:    "DCSReader",
+			Msg:   fmt.Sprintf("Downloaded %d bytes from DCS", totalBytes),
+		})
+	}()
+
+	return pr
+}
+
+func (fl *fileLogDCS) reportDCSWarning(err error, filename string) {
+	fl.reporter.ReportEvent(Event{
+		Op:      "DCSReader",
+		File:    fmt.Sprintf("sj://%s/%s", fl.bucketName, filename),
+		Warning: err,
+	})
+}
+
+func (fl *fileLogDCS) reportDCSError(err error, filename string) {
+	fl.reporter.ReportEvent(Event{
+		Op:    "DCSReader",
+		File:  fmt.Sprintf("sj://%s/%s", fl.bucketName, filename),
+		Error: err,
+	})
 }
