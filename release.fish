@@ -20,7 +20,7 @@ echo
 set DISTDIR dist/v$VERSION
 mkdir -p $DISTDIR
 
-for pair in linux/386 linux/amd64 linux/arm linux/arm64 darwin/amd64 dragonfly/amd64 freebsd/amd64 netbsd/amd64 openbsd/amd64
+for pair in linux/386 linux/amd64 linux/arm linux/arm64 darwin/amd64 darwin/arm64 dragonfly/amd64 freebsd/amd64 netbsd/amd64 openbsd/amd64
 	set GOOS   (echo $pair | cut -d'/' -f1)
 	set GOARCH (echo $pair | cut -d'/' -f2)
 	set BIN    $DISTDIR/oklog-$VERSION-$GOOS-$GOARCH

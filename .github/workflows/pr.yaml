@@ -1,0 +1,18 @@
+name: PR Check
+
+on:
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  container-job:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v2
+      - name: fish-actions/install-fish
+        uses: fish-actions/install-fish@v1.1.0
+      - name: Build binaries
+        run: ./release.fish
+      - name: Build container
+        run: docker build -t kristaxox/oklog:latest .
