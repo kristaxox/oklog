@@ -4,12 +4,7 @@ function version_prompt
 	echo "Semantic version: "
 end
 
-read --prompt version_prompt VERSION
-
-if test (echo $VERSION | grep '^v')
-	echo Use the raw semantic version, without a v prefix
-	exit
-end
+set VERSION (cat ./version)
 
 set REV (git rev-parse --short HEAD)
 echo Tagging $REV as v$VERSION
@@ -25,6 +20,6 @@ for pair in linux/386 linux/amd64 linux/arm linux/arm64 darwin/amd64 darwin/arm6
 	set GOARCH (echo $pair | cut -d'/' -f2)
 	set BIN    $DISTDIR/oklog-$VERSION-$GOOS-$GOARCH
 	echo $BIN
-	env GOOS=$GOOS GOARCH=$GOARCH go build -o $BIN -ldflags="-X main.version=$VERSION" github.com/oklog/oklog/cmd/oklog
+	env GOOS=$GOOS GOARCH=$GOARCH go build -o $BIN -ldflags="-X main.version=$VERSION" ./cmd/oklog
 end
 
