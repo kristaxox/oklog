@@ -3,7 +3,7 @@ GOOS ?= linux
 GOARCH ?= amd64
 GOPATH ?= $(shell go env GOPATH)
 
-GCP_PROJECT ?= storj-qa-1
+GCP_PROJECT ?= storj-global
 
 ifeq ($(VERSION),)
 	BRANCH_NAME ?= $(shell git rev-parse --abbrev-ref HEAD | sed "s!/!-!g")
