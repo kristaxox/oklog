@@ -19,11 +19,11 @@ require (
 	github.com/miekg/dns v1.1.41 // indirect
 	github.com/oklog/run v1.0.0
 	github.com/oklog/ulid v1.3.1
-	github.com/pborman/uuid v0.0.0-20170612153648-e790cca94e6c
+	github.com/pborman/uuid v1.2.0
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.4.0
-	github.com/prometheus/prometheus v2.1.0+incompatible
-	github.com/rs/cors v0.0.0-20170727213201-7af7a1e09ba3
+	github.com/prometheus/prometheus v1.8.2-0.20190818123050-43acd0e2e93f
+	github.com/rs/cors v1.6.0
 	github.com/spaolacci/murmur3 v1.1.0 // indirect
 	go.uber.org/multierr v1.6.0 // indirect
 	golang.org/x/net v0.0.0-20210410081132-afb366fc7cd1 // indirect

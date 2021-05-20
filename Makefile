@@ -43,6 +43,12 @@ image: build ## Build oklog docker image
 	echo Built version: ${TAG}
 	docker build --build-arg TAG=${TAG} --build-arg GOARCH=${GOARCH} --pull=true -t gcr.io/${GCP_PROJECT}/oklog:${TAG}-${GOARCH} -f Dockerfile .	
 
+### Test
+
+.PHONY: test
+test: ## run all tests
+	go test ./...
+
 ##@ Deploy
 
 .PHONY: push-image
